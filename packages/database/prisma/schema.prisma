@@ -1,14 +1,3 @@
-// TaskFlow AI - Shared Database Schema (Design)
-//
-// Multi-tenancy strategy:
-// - Single shared Postgres schema
-// - tenant_id on every tenant-scoped table
-// - tenant_id included in unique constraints and indexes as needed
-//
-// pgvector:
-// - Enable extension in the first migration: CREATE EXTENSION IF NOT EXISTS vector;
-// - Embeddings are stored with Unsupported("vector(<dim>)") type.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -18,56 +7,74 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// -----------------------------
-// Enums
-// -----------------------------
+/// =============================================================
+/// Enums
+/// =============================================================
 
-enum AuditEventType {
-  WORKFLOW_STARTED
-  WORKFLOW_COMPLETED
-  WORKFLOW_FAILED
-  WORKFLOW_CHECKPOINT_SAVED
-  AGENT_RUN_STARTED
-  AGENT_RUN_COMPLETED
-  AGENT_RUN_FAILED
-  MEMORY_UPSERTED
-  API_REQUEST
-  SYSTEM
+enum WorkspaceStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
 }
 
-enum ActorType {
-  USER
-  AGENT
-  WORKFLOW
-  SYSTEM
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
 }
 
-enum AgentRunStatus {
-  PENDING
-  RUNNING
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
   COMPLETED
-  FAILED
   CANCELLED
 }
 
-enum AgentStepKind {
-  CREW
-  MODEL
-  TOOL
-  WORKFLOW
-  OTHER
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELLED
 }
 
-enum AgentStepStatus {
-  STARTED
-  IN_PROGRESS
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
   COMPLETED
-  FAILED
+  CANCELLED
+}
+
+enum ActivityType {
+  PROJECT_CREATED
+  TASK_CREATED
+  TASK_UPDATED
+  TASK_STATUS_CHANGED
+  COMMENT_ADDED
+  SPRINT_CREATED
+  SPRINT_STARTED
+  SPRINT_COMPLETED
+  APPROVAL_REQUESTED
+  APPROVAL_DECIDED
+  WORKFLOW_STARTED
+  WORKFLOW_COMPLETED
+  WORKFLOW_FAILED
+  SYSTEM
 }
 
 enum WorkflowRunStatus {
   PENDING
   RUNNING
+  PAUSED
   COMPLETED
   FAILED
   CANCELLED
@@ -79,272 +86,994 @@ enum WorkflowCheckpointStatus {
   FAILED
 }
 
-enum MemoryNamespaceType {
-  AGENT
+enum AgentRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AgentStepStatus {
+  STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum AgentStepKind {
+  CREW
+  MODEL
+  TOOL
   WORKFLOW
+  OTHER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum MemoryDomainType {
+  SEMANTIC
+  DECISION
+  PREFERENCE
+}
+
+enum MemoryNamespaceType {
+  WORKSPACE
+  PROJECT
+  SPRINT
+  TASK
+  WORKFLOW
+  AGENT
   USER
   SYSTEM
 }
 
-// -----------------------------
-// Multi-tenancy
-// -----------------------------
+enum PreferenceScope {
+  USER
+  TEAM
+  WORKSPACE
+}
+
+enum SourceType {
+  TASK
+  SPRINT
+  MEETING
+  WORKFLOW
+  RISK
+  USER_NOTE
+  SYSTEM
+  OTHER
+}
+
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum AuditEventType {
+  API_REQUEST
+  AUTH
+  DATA_CHANGE
+  WORKFLOW
+  AGENT
+  MEMORY
+  BILLING
+  SECURITY
+  SYSTEM
+}
+
+enum ActorType {
+  USER
+  API_KEY
+  AGENT
+  SYSTEM
+}
+
+/// =============================================================
+/// Core Tenant / Identity / RBAC
+/// =============================================================
 
 model Tenant {
-  id         String    @id @default(uuid())
-  name       String?   @map("name")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  id        String   @id @default(uuid())
+  slug      String   @unique @map("slug")
+  name      String   @map("name")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  auditLogs        AuditLog[]
-  agentRuns        AgentRun[]
-  workflowRuns     WorkflowRun[]
+  users         User[]
+  workspaces    Workspace[]
+  roles         Role[]
+  permissions   Permission[]
+  projects      Project[]
+  tasks         Task[]
+  sprints       Sprint[]
+  comments      Comment[]
+  activities    Activity[]
+  workflows     AIWorkflow[]
+  workflowRuns  AIWorkflowRun[]
+  agentRuns     AIAgentRun[]
+  approvals     Approval[]
   memoryCollections MemoryCollection[]
+  memoryItems   MemoryItem[]
+  memoryEmbeddings MemoryEmbedding[]
+  mcpApiKeys    McpApiKey[]
+  subscriptions Subscription[]
+  auditLogs     AuditLog[]
 
   @@map("tenants")
 }
 
-// -----------------------------
-// Audit Logs (append-only)
-// -----------------------------
+model User {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  email       String   @map("email")
+  displayName String?  @map("display_name")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
-model AuditLog {
-  id          String         @id @default(uuid())
-  tenantId    String         @map("tenant_id")
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships WorkspaceMembership[]
+  comments    Comment[]
+  approvals   Approval[] @relation("approval_decider")
+  tasksAssigned Task[] @relation("task_assignee")
+  tasksCreated  Task[] @relation("task_creator")
+  projectsCreated Project[] @relation("project_creator")
+  activitiesActor Activity[] @relation("activity_actor_user")
+  apiKeys      McpApiKey[] @relation("api_key_creator")
 
-  eventType   AuditEventType @map("event_type")
-  actorType   ActorType?     @map("actor_type")
-  actorId     String?        @map("actor_id")
-
-  subjectType String?        @map("subject_type")
-  subjectId   String?        @map("subject_id")
-
-  // Redacted-safe context for debugging/traceability
-  context     Json?          @map("context")
-
-  createdAt   DateTime       @default(now()) @map("created_at")
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, createdAt])
-  @@map("audit_log")
+  @@unique([tenantId, email])
+  @@index([tenantId, isActive, deletedAt])
+  @@map("users")
 }
 
-// -----------------------------
-// AI Agent Tracking
-// -----------------------------
-
-model AgentRun {
+model Workspace {
   id          String          @id @default(uuid())
   tenantId    String          @map("tenant_id")
+  slug        String          @map("slug")
+  name        String          @map("name")
+  status      WorkspaceStatus @default(ACTIVE)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
 
-  // Correlation
-  workflowRunId        String? @map("workflow_run_id")
-  llmTraceId           String? @map("llm_trace_id")
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships WorkspaceMembership[]
+  projects    Project[]
+  tasks       Task[]
+  sprints     Sprint[]
+  comments    Comment[]
+  activities  Activity[]
+  workflows   AIWorkflow[]
+  workflowRuns AIWorkflowRun[]
+  agentRuns   AIAgentRun[]
+  approvals   Approval[]
+  memoryCollections MemoryCollection[]
+  mcpApiKeys  McpApiKey[]
 
-  agentKey    String          @map("agent_key") // canonical agent identifier (template key)
-  externalId  String?         @map("external_id") // optional external attempt id
-  status      AgentRunStatus  @default(PENDING)
-
-  startedAt   DateTime?       @map("started_at")
-  completedAt DateTime?       @map("completed_at")
-  errorCode   String?         @map("error_code")
-
-  // Metadata is redacted-safe JSON
-  metadata    Json?           @map("metadata")
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  steps AgentStep[]
-
-  @@index([tenantId, status, startedAt])
-  @@map("agent_run")
+  @@unique([tenantId, slug])
+  @@index([tenantId, status, deletedAt])
+  @@map("workspaces")
 }
 
-model AgentStep {
-  id           String            @id @default(uuid())
-  tenantId     String            @map("tenant_id")
+model WorkspaceMembership {
+  id          String            @id @default(uuid())
+  tenantId    String            @map("tenant_id")
+  workspaceId String            @map("workspace_id")
+  userId      String            @map("user_id")
+  status      MembershipStatus  @default(INVITED)
+  joinedAt    DateTime?         @map("joined_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  deletedAt   DateTime?         @map("deleted_at")
 
-  agentRunId   String            @map("agent_run_id")
-  stepSeq      Int               @map("step_seq")
-  kind         AgentStepKind    @map("kind")
-  status       AgentStepStatus @default(STARTED)
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleAssignments WorkspaceMembershipRole[]
 
-  startedAt    DateTime?        @map("started_at")
-  completedAt  DateTime?        @map("completed_at")
-  errorCode    String?         @map("error_code")
-
-  // Minimal payload for traceability (avoid storing secrets/raw PII)
-  details      Json?           @map("details")
-
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
-
-  toolCalls AgentToolCall[]
-
-  @@unique([agentRunId, stepSeq])
-  @@index([tenantId, agentRunId])
-  @@map("agent_step")
+  @@unique([workspaceId, userId])
+  @@index([tenantId, workspaceId, status, deletedAt])
+  @@map("workspace_memberships")
 }
 
-model AgentToolCall {
+model Role {
   id          String    @id @default(uuid())
   tenantId    String    @map("tenant_id")
-
-  agentStepId String    @map("agent_step_id")
-  toolName    String    @map("tool_name")
+  key         String    @map("key")
+  name        String    @map("name")
+  description String?   @map("description")
+  isSystem    Boolean   @default(false) @map("is_system")
   createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
-  args        Json?     @map("args")
-  result      Json?     @map("result") // store summary / redacted result later
-  errorCode   String?   @map("error_code")
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  memberships WorkspaceMembershipRole[]
 
-  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  agentStep AgentStep @relation(fields: [agentStepId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, toolName, createdAt])
-  @@map("agent_tool_call")
+  @@unique([tenantId, key])
+  @@index([tenantId, isSystem, deletedAt])
+  @@map("roles")
 }
 
-// -----------------------------
-// Workflow Persistence
-// -----------------------------
+model Permission {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  key         String    @map("key")
+  description String?   @map("description")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  deletedAt   DateTime? @map("deleted_at")
 
-model WorkflowRun {
-  id           String             @id @default(uuid())
-  tenantId     String             @map("tenant_id")
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roles       RolePermission[]
 
-  jobId        String             @map("job_id") // stable job id from api layer
-  workflowKey  String             @map("workflow_key")
-  workflowVersion String          @map("workflow_version")
-
-  status       WorkflowRunStatus @default(PENDING)
-  startedAt    DateTime?         @map("started_at")
-  completedAt  DateTime?         @map("completed_at")
-  cancelledAt  DateTime?         @map("cancelled_at")
-  errorCode    String?          @map("error_code")
-
-  // Store only references/hashes; full state is in checkpoints
-  inputRefHash String?          @map("input_ref_hash")
-  metadata     Json?            @map("metadata")
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  checkpoints WorkflowCheckpoint[]
-
-  @@index([tenantId, status, startedAt])
-  @@unique([tenantId, jobId, workflowKey, workflowVersion])
-  @@map("workflow_run")
+  @@unique([tenantId, key])
+  @@index([tenantId, deletedAt])
+  @@map("permissions")
 }
 
-model WorkflowCheckpoint {
-  id            String                   @id @default(uuid())
-  tenantId      String                   @map("tenant_id")
+model RolePermission {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  roleId       String    @map("role_id")
+  permissionId String    @map("permission_id")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
-  workflowRunId String                   @map("workflow_run_id")
-  checkpointSeq Int                      @map("checkpoint_seq")
-  status        WorkflowCheckpointStatus @default(ACTIVE)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  role         Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
-  state         Json                     @map("state_json") // canonical workflow state for resume
-  stateHash     String                  @map("state_hash")
+  @@unique([roleId, permissionId])
+  @@index([tenantId, roleId, permissionId])
+  @@map("role_permissions")
+}
 
-  // Optional pointer to external artifacts
-  artifactRefs  Json?                  @map("artifact_refs")
+model WorkspaceMembershipRole {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  membershipId  String    @map("membership_id")
+  roleId        String    @map("role_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
-  createdAt     DateTime               @default(now()) @map("created_at")
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  membership    WorkspaceMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  role          Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  @@unique([membershipId, roleId])
+  @@index([tenantId, membershipId, roleId])
+  @@map("workspace_membership_roles")
+}
+
+/// =============================================================
+/// Product Domain: Projects / Tasks / Sprints / Comments / Activities
+/// =============================================================
+
+model Project {
+  id          String      @id @default(uuid())
+  tenantId    String      @map("tenant_id")
+  workspaceId String      @map("workspace_id")
+  key         String      @map("key")
+  name        String      @map("name")
+  description String?     @map("description")
+  status      ProjectStatus @default(PLANNING)
+  createdById String?     @map("created_by_id")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  deletedAt   DateTime?   @map("deleted_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy   User?       @relation("project_creator", fields: [createdById], references: [id], onDelete: SetNull)
+  tasks       Task[]
+  sprints     Sprint[]
+
+  @@unique([workspaceId, key])
+  @@index([tenantId, workspaceId, status, deletedAt])
+  @@map("projects")
+}
+
+model Sprint {
+  id          String      @id @default(uuid())
+  tenantId    String      @map("tenant_id")
+  workspaceId String      @map("workspace_id")
+  projectId   String      @map("project_id")
+  name        String      @map("name")
+  goal        String?     @map("goal")
+  status      SprintStatus @default(PLANNED)
+  startsAt    DateTime?   @map("starts_at")
+  endsAt      DateTime?   @map("ends_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  deletedAt   DateTime?   @map("deleted_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+
+  @@index([tenantId, workspaceId, projectId, status, deletedAt])
+  @@index([tenantId, startsAt, endsAt])
+  @@map("sprints")
+}
+
+model Task {
+  id             String       @id @default(uuid())
+  tenantId       String       @map("tenant_id")
+  workspaceId    String       @map("workspace_id")
+  projectId      String       @map("project_id")
+  sprintId       String?      @map("sprint_id")
+  key            String       @map("key")
+  title          String       @map("title")
+  description    String?      @map("description")
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  storyPoints    Int?         @map("story_points")
+  dueAt          DateTime?    @map("due_at")
+  assigneeId     String?      @map("assignee_id")
+  createdById    String?      @map("created_by_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  deletedAt      DateTime?    @map("deleted_at")
+
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint         Sprint?      @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assignee       User?        @relation("task_assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdBy      User?        @relation("task_creator", fields: [createdById], references: [id], onDelete: SetNull)
+  comments       Comment[]
+  approvals      Approval[]   @relation("approval_task")
+
+  @@unique([projectId, key])
+  @@index([tenantId, workspaceId, projectId, status, priority, deletedAt])
+  @@index([tenantId, assigneeId, status, deletedAt])
+  @@index([tenantId, sprintId, status, deletedAt])
+  @@map("tasks")
+}
+
+model Comment {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+  workspaceId String    @map("workspace_id")
+  taskId      String    @map("task_id")
+  authorId    String?   @map("author_id")
+  body        String    @map("body")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author      User?     @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, workspaceId, taskId, createdAt, deletedAt])
+  @@map("comments")
+}
+
+model Activity {
+  id           String       @id @default(uuid())
+  tenantId     String       @map("tenant_id")
+  workspaceId  String       @map("workspace_id")
+  actorUserId  String?      @map("actor_user_id")
+  type         ActivityType @map("type")
+  subjectType  String?      @map("subject_type")
+  subjectId    String?      @map("subject_id")
+  metadata     Json?        @map("metadata")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actorUser    User?        @relation("activity_actor_user", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, workspaceId, type, createdAt])
+  @@index([tenantId, subjectType, subjectId, createdAt])
+  @@map("activities")
+}
+
+/// =============================================================
+/// AI Workflows / Agent Runs / Approvals
+/// =============================================================
+
+model AIWorkflow {
+  id             String    @id @default(uuid())
+  tenantId       String    @map("tenant_id")
+  workspaceId    String    @map("workspace_id")
+  key            String    @map("key")
+  version        String    @map("version")
+  name           String    @map("name")
+  definition     Json      @map("definition")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs           AIWorkflowRun[]
+
+  @@unique([workspaceId, key, version])
+  @@index([tenantId, workspaceId, key, isActive, deletedAt])
+  @@map("ai_workflows")
+}
+
+model AIWorkflowRun {
+  id              String             @id @default(uuid())
+  tenantId        String             @map("tenant_id")
+  workspaceId     String             @map("workspace_id")
+  workflowId      String             @map("workflow_id")
+  jobId           String             @map("job_id")
+  status          WorkflowRunStatus  @default(PENDING)
+  inputRefHash    String?            @map("input_ref_hash")
+  metadata        Json?              @map("metadata")
+  startedAt       DateTime?          @map("started_at")
+  completedAt     DateTime?          @map("completed_at")
+  cancelledAt     DateTime?          @map("cancelled_at")
+  errorCode       String?            @map("error_code")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime?          @map("deleted_at")
+
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace       Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflow        AIWorkflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  checkpoints     AIWorkflowCheckpoint[]
+  events          AIWorkflowEvent[]
+  agentRuns       AIAgentRun[]
+  approvals       Approval[]         @relation("approval_workflow_run")
+
+  @@unique([tenantId, workspaceId, jobId])
+  @@index([tenantId, workspaceId, workflowId, status, deletedAt])
+  @@index([tenantId, startedAt, completedAt])
+  @@map("ai_workflow_runs")
+}
+
+model AIWorkflowCheckpoint {
+  id             String                  @id @default(uuid())
+  tenantId       String                  @map("tenant_id")
+  workflowRunId  String                  @map("workflow_run_id")
+  checkpointSeq  Int                     @map("checkpoint_seq")
+  status         WorkflowCheckpointStatus @default(ACTIVE)
+  stateJson      Json                    @map("state_json")
+  stateHash      String                  @map("state_hash")
+  artifactRefs   Json?                   @map("artifact_refs")
+  createdAt      DateTime                @default(now()) @map("created_at")
+
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowRun    AIWorkflowRun           @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
 
   @@unique([workflowRunId, checkpointSeq])
   @@index([tenantId, workflowRunId, createdAt])
-  @@map("workflow_checkpoint")
+  @@map("ai_workflow_checkpoints")
 }
 
-model WorkflowEventLog {
+model AIWorkflowEvent {
   id            String    @id @default(uuid())
   tenantId      String    @map("tenant_id")
-
   workflowRunId String    @map("workflow_run_id")
-  checkpointSeq Int?      @map("checkpoint_seq") // nullable when event isn't tied to a checkpoint
-
-  eventType     String    @map("event_type") // keep flexible for workflow evolution
   eventSeq      Int       @map("event_seq")
+  eventType     String    @map("event_type")
   payload       Json?     @map("payload")
-
   createdAt     DateTime  @default(now()) @map("created_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowRun   AIWorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId, workflowRunId, createdAt])
   @@unique([workflowRunId, eventSeq])
-  @@map("workflow_event_log")
+  @@index([tenantId, workflowRunId, createdAt])
+  @@map("ai_workflow_events")
 }
 
-// -----------------------------
-// Memory Storage (pgvector)
-// -----------------------------
+model AIAgentRun {
+  id              String         @id @default(uuid())
+  tenantId        String         @map("tenant_id")
+  workspaceId     String         @map("workspace_id")
+  workflowRunId   String?        @map("workflow_run_id")
+  agentKey        String         @map("agent_key")
+  externalId      String?        @map("external_id")
+  status          AgentRunStatus @default(PENDING)
+  llmTraceId      String?        @map("llm_trace_id")
+  metadata        Json?          @map("metadata")
+  startedAt       DateTime?      @map("started_at")
+  completedAt     DateTime?      @map("completed_at")
+  errorCode       String?        @map("error_code")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  deletedAt       DateTime?      @map("deleted_at")
+
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflowRun     AIWorkflowRun? @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  steps           AIAgentStep[]
+
+  @@index([tenantId, workspaceId, status, startedAt, deletedAt])
+  @@index([tenantId, workflowRunId, deletedAt])
+  @@map("ai_agent_runs")
+}
+
+model AIAgentStep {
+  id            String          @id @default(uuid())
+  tenantId      String          @map("tenant_id")
+  agentRunId    String          @map("agent_run_id")
+  stepSeq       Int             @map("step_seq")
+  kind          AgentStepKind   @map("kind")
+  status        AgentStepStatus @default(STARTED)
+  details       Json?           @map("details")
+  startedAt     DateTime?       @map("started_at")
+  completedAt   DateTime?       @map("completed_at")
+  errorCode     String?         @map("error_code")
+
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentRun      AIAgentRun      @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  toolCalls     AIAgentToolCall[]
+
+  @@unique([agentRunId, stepSeq])
+  @@index([tenantId, agentRunId, status])
+  @@map("ai_agent_steps")
+}
+
+model AIAgentToolCall {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  agentStepId  String    @map("agent_step_id")
+  toolName     String    @map("tool_name")
+  args         Json?     @map("args")
+  result       Json?     @map("result")
+  errorCode    String?   @map("error_code")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentStep    AIAgentStep @relation(fields: [agentStepId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, toolName, createdAt])
+  @@map("ai_agent_tool_calls")
+}
+
+model Approval {
+  id             String         @id @default(uuid())
+  tenantId       String         @map("tenant_id")
+  workspaceId    String         @map("workspace_id")
+  workflowRunId  String?        @map("workflow_run_id")
+  taskId         String?        @map("task_id")
+  subjectType    String         @map("subject_type")
+  subjectId      String         @map("subject_id")
+  approverUserId String?        @map("approver_user_id")
+  status         ApprovalStatus @default(PENDING)
+  reason         String?        @map("reason")
+  decidedAt      DateTime?      @map("decided_at")
+  metadata       Json?          @map("metadata")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  deletedAt      DateTime?      @map("deleted_at")
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workflowRun    AIWorkflowRun? @relation("approval_workflow_run", fields: [workflowRunId], references: [id], onDelete: SetNull)
+  task           Task?          @relation("approval_task", fields: [taskId], references: [id], onDelete: SetNull)
+  approverUser   User?          @relation("approval_decider", fields: [approverUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, workspaceId, status, deletedAt])
+  @@index([tenantId, subjectType, subjectId, deletedAt])
+  @@map("approvals")
+}
+
+/// =============================================================
+/// Memory + Embeddings (pgvector)
+/// =============================================================
 
 model MemoryCollection {
-  id          String             @id @default(uuid())
-  tenantId    String             @map("tenant_id")
+  id                 String             @id @default(uuid())
+  tenantId           String             @map("tenant_id")
+  workspaceId        String             @map("workspace_id")
+  domain             MemoryDomainType   @map("memory_domain")
+  namespaceType      MemoryNamespaceType @map("namespace_type")
+  namespaceKey       String             @map("namespace_key")
+  retentionPolicyKey String?            @map("retention_policy_key")
+  description        String?            @map("description")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  deletedAt          DateTime?          @map("deleted_at")
 
-  namespaceType MemoryNamespaceType @map("namespace_type")
-  namespaceKey  String              @map("namespace_key") // e.g., agentKey/workflowKey/userId in canonical form
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items              MemoryItem[]
 
-  description  String?          @map("description")
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  items  MemoryItem[]
-
-  @@index([tenantId, namespaceType, namespaceKey])
-  @@unique([tenantId, namespaceType, namespaceKey])
-  @@map("memory_collection")
+  @@unique([tenantId, workspaceId, domain, namespaceType, namespaceKey])
+  @@index([tenantId, workspaceId, domain, deletedAt])
+  @@index([tenantId, namespaceType, namespaceKey, deletedAt])
+  @@map("memory_collections")
 }
 
 model MemoryItem {
-  id            String    @id @default(uuid())
-  tenantId      String    @map("tenant_id")
+  id                    String           @id @default(uuid())
+  tenantId              String           @map("tenant_id")
+  workspaceId           String           @map("workspace_id")
+  collectionId          String           @map("memory_collection_id")
+  contentText           String?          @map("content_text")
+  contentHash           String           @map("content_hash")
+  sourceType            SourceType       @default(OTHER) @map("source_type")
+  sourceId              String?          @map("source_id")
+  importanceScore       Float            @default(0.5) @map("importance_score")
+  freshnessExpiresAt    DateTime?        @map("freshness_expires_at")
+  isCompressed          Boolean          @default(false) @map("is_compressed")
+  compressionParentItemId String?        @map("compression_parent_item_id")
+  decisionType          String?          @map("decision_type")
+  decisionOutcome       String?          @map("decision_outcome")
+  preferenceKey         String?          @map("preference_key")
+  preferenceScope       PreferenceScope? @map("preference_scope")
+  metadata              Json?            @map("metadata")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  deletedAt             DateTime?        @map("deleted_at")
 
-  collectionId  String    @map("memory_collection_id")
+  tenant                Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace             Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  collection            MemoryCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  parentItem            MemoryItem?      @relation("memory_item_compression", fields: [compressionParentItemId], references: [id], onDelete: SetNull)
+  compressedChildren    MemoryItem[]     @relation("memory_item_compression")
+  embeddings            MemoryEmbedding[]
 
-  // Content is optional because systems may store pointers in large deployments.
-  contentText   String?   @map("content_text")
-  contentHash   String    @map("content_hash")
-
-  metadata      Json?     @map("metadata")
-  createdAt     DateTime  @default(now()) @map("created_at")
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  collection MemoryCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
-
-  embeddings MemoryEmbedding[]
-
-  @@index([tenantId, collectionId])
   @@unique([tenantId, collectionId, contentHash])
-  @@map("memory_item")
+  @@index([tenantId, workspaceId, collectionId, deletedAt])
+  @@index([tenantId, sourceType, sourceId, deletedAt])
+  @@index([tenantId, preferenceKey, preferenceScope, deletedAt])
+  @@index([tenantId, createdAt, deletedAt])
+  @@map("memory_items")
 }
 
 model MemoryEmbedding {
-  id           String  @id @default(uuid())
-  tenantId     String  @map("tenant_id")
+  id                String   @id @default(uuid())
+  tenantId          String   @map("tenant_id")
+  workspaceId       String   @map("workspace_id")
+  memoryItemId      String   @map("memory_item_id")
+  embedding         Unsupported("vector(1536)")
+  embeddingModelKey String   @map("embedding_model_key")
+  embeddingDimension Int     @default(1536) @map("embedding_dimension")
+  embeddingVersion  String?  @map("embedding_version")
+  createdAt         DateTime @default(now()) @map("created_at")
+  deletedAt         DateTime? @map("deleted_at")
 
-  memoryItemId String  @map("memory_item_id")
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  item              MemoryItem @relation(fields: [memoryItemId], references: [id], onDelete: Cascade)
 
-  // pgvector column
-  // Note: Prisma uses Unsupported. Ensure pgvector extension is enabled.
-  embedding    Unsupported("vector(1536)")
+  @@index([tenantId, workspaceId, embeddingModelKey, deletedAt])
+  @@index([tenantId, memoryItemId, deletedAt])
+  @@map("memory_embeddings")
+}
 
-  // Helps track embedding provenance
-  embeddingModelKey String? @map("embedding_model_key")
-  createdAt    DateTime  @default(now()) @map("created_at")
+/// =============================================================
+/// MCP API keys
+/// =============================================================
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  item MemoryItem @relation(fields: [memoryItemId], references: [id], onDelete: Cascade)
+model McpApiKey {
+  id             String      @id @default(uuid())
+  tenantId       String      @map("tenant_id")
+  workspaceId    String      @map("workspace_id")
+  createdByUserId String?    @map("created_by_user_id")
+  name           String      @map("name")
+  keyPrefix      String      @map("key_prefix")
+  keyHash        String      @map("key_hash")
+  status         ApiKeyStatus @default(ACTIVE)
+  scopes         Json?       @map("scopes")
+  lastUsedAt     DateTime?   @map("last_used_at")
+  expiresAt      DateTime?   @map("expires_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  revokedAt      DateTime?   @map("revoked_at")
+  deletedAt      DateTime?   @map("deleted_at")
+
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace      Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdBy      User?       @relation("api_key_creator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, keyHash])
+  @@index([tenantId, workspaceId, status, deletedAt])
+  @@index([tenantId, keyPrefix])
+  @@map("mcp_api_keys")
+}
+
+/// =============================================================
+/// Billing / Subscription
+/// =============================================================
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  tenantId           String             @map("tenant_id")
+  workspaceId        String?            @map("workspace_id")
+  provider           String             @map("provider")
+  externalId         String             @map("external_id")
+  planKey            String             @map("plan_key")
+  status             SubscriptionStatus @default(TRIALING)
+  interval           BillingInterval    @default(MONTHLY)
+  quantity           Int                @default(1)
+  currentPeriodStart DateTime?          @map("current_period_start")
+  currentPeriodEnd   DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd  Boolean            @default(false) @map("cancel_at_period_end")
+  metadata           Json?              @map("metadata")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  deletedAt          DateTime?          @map("deleted_at")
+
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace          Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalId])
+  @@index([tenantId, status, deletedAt])
+  @@index([tenantId, workspaceId, status, deletedAt])
+  @@map("subscriptions")
+}
+
+/// =============================================================
+/// Audit logs (append-only)
+/// =============================================================
+
+model AuditLog {
+  id            String         @id @default(uuid())
+  tenantId      String         @map("tenant_id")
+  workspaceId   String?        @map("workspace_id")
+  eventType     AuditEventType @map("event_type")
+  actorType     ActorType?     @map("actor_type")
+  actorId       String?        @map("actor_id")
+  subjectType   String?        @map("subject_type")
+  subjectId     String?        @map("subject_id")
+  requestId     String?        @map("request_id")
+  traceId       String?        @map("trace_id")
+  ipAddress     String?        @map("ip_address")
+  context       Json?          @map("context")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace     Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
-  @@map("memory_embedding")
+  @@index([tenantId, workspaceId, createdAt])
+  @@index([tenantId, eventType, createdAt])
+  @@index([tenantId, subjectType, subjectId, createdAt])
+  @@map("audit_logs")
+}
+
+/// =============================================================
+/// AI Telemetry / Analytics
+/// =============================================================
+
+enum AIModelProvider {
+  OPENAI
+  ANTHROPIC
+  GOOGLE
+  MISTRAL
+  AZURE_OPENAI
+  OTHER
+}
+
+enum HumanOverrideType {
+  WORKFLOW_DECISION
+  AGENT_OUTPUT_EDIT
+  APPROVAL_OVERRIDE
+  RESPONSE_REGENERATION
+  TASK_PLAN_OVERRIDE
+  OTHER
+}
+
+enum HallucinationStatus {
+  SUSPECTED
+  CONFIRMED
+  DISMISSED
+}
+
+enum MetricGranularity {
+  HOUR
+  DAY
+  WEEK
+  MONTH
+}
+
+model AITelemetryEvent {
+  id               String            @id @default(uuid())
+  tenantId         String            @map("tenant_id")
+  workspaceId      String?           @map("workspace_id")
+  workflowRunId    String?           @map("workflow_run_id")
+  agentRunId       String?           @map("agent_run_id")
+  userId           String?           @map("user_id")
+  requestId        String?           @map("request_id")
+  traceId          String?           @map("trace_id")
+  eventType        String            @map("event_type")
+  eventAt          DateTime          @default(now()) @map("event_at")
+  payload          Json?             @map("payload")
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace        Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  workflowRun      AIWorkflowRun?    @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  agentRun         AIAgentRun?       @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, eventAt])
+  @@index([tenantId, workspaceId, eventType, eventAt])
+  @@index([tenantId, workflowRunId, eventAt])
+  @@index([tenantId, agentRunId, eventAt])
+  @@map("ai_telemetry_events")
+}
+
+model AICostUsage {
+  id                  String            @id @default(uuid())
+  tenantId            String            @map("tenant_id")
+  workspaceId         String?           @map("workspace_id")
+  workflowRunId       String?           @map("workflow_run_id")
+  agentRunId          String?           @map("agent_run_id")
+  modelProvider       AIModelProvider   @map("model_provider")
+  modelKey            String            @map("model_key")
+  operationType       String            @map("operation_type") // e.g. completion, embedding, rerank
+  inputTokens         Int               @default(0) @map("input_tokens")
+  outputTokens        Int               @default(0) @map("output_tokens")
+  totalTokens         Int               @default(0) @map("total_tokens")
+  costUsd             Decimal           @default(0) @db.Decimal(18, 6) @map("cost_usd")
+  latencyMs           Int?              @map("latency_ms")
+  success             Boolean           @default(true) @map("success")
+  errorCode           String?           @map("error_code")
+  measuredAt          DateTime          @default(now()) @map("measured_at")
+
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace           Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  workflowRun         AIWorkflowRun?    @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  agentRun            AIAgentRun?       @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, measuredAt])
+  @@index([tenantId, workspaceId, measuredAt])
+  @@index([tenantId, modelProvider, modelKey, measuredAt])
+  @@index([tenantId, workflowRunId, measuredAt])
+  @@map("ai_cost_usage")
+}
+
+model AIConfidenceScore {
+  id                 String           @id @default(uuid())
+  tenantId           String           @map("tenant_id")
+  workspaceId        String?          @map("workspace_id")
+  workflowRunId      String?          @map("workflow_run_id")
+  agentRunId         String?          @map("agent_run_id")
+  scoreType          String           @map("score_type") // response_confidence, risk_confidence, planner_confidence
+  score              Float            @map("score")
+  rationale          String?          @map("rationale")
+  signals            Json?            @map("signals")
+  measuredAt         DateTime         @default(now()) @map("measured_at")
+
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace          Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  workflowRun        AIWorkflowRun?   @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  agentRun           AIAgentRun?      @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, measuredAt])
+  @@index([tenantId, workspaceId, scoreType, measuredAt])
+  @@index([tenantId, workflowRunId, measuredAt])
+  @@map("ai_confidence_scores")
+}
+
+model HumanOverrideEvent {
+  id                String            @id @default(uuid())
+  tenantId          String            @map("tenant_id")
+  workspaceId       String?           @map("workspace_id")
+  workflowRunId     String?           @map("workflow_run_id")
+  agentRunId        String?           @map("agent_run_id")
+  approvalId        String?           @map("approval_id")
+  userId            String?           @map("user_id")
+  overrideType      HumanOverrideType @map("override_type")
+  reason            String?           @map("reason")
+  beforeSnapshot    Json?             @map("before_snapshot")
+  afterSnapshot     Json?             @map("after_snapshot")
+  createdAt         DateTime          @default(now()) @map("created_at")
+
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace         Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  workflowRun       AIWorkflowRun?    @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  agentRun          AIAgentRun?       @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  approval          Approval?         @relation(fields: [approvalId], references: [id], onDelete: SetNull)
+  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, workspaceId, overrideType, createdAt])
+  @@index([tenantId, workflowRunId, createdAt])
+  @@map("human_override_events")
+}
+
+model ApprovalAnalyticsEvent {
+  id                String           @id @default(uuid())
+  tenantId          String           @map("tenant_id")
+  workspaceId       String?          @map("workspace_id")
+  approvalId        String           @map("approval_id")
+  workflowRunId     String?          @map("workflow_run_id")
+  approverUserId    String?          @map("approver_user_id")
+  status            ApprovalStatus   @map("status")
+  decisionLatencyMs Int?             @map("decision_latency_ms")
+  escalated         Boolean          @default(false) @map("escalated")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace         Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  approval          Approval         @relation(fields: [approvalId], references: [id], onDelete: Cascade)
+  workflowRun       AIWorkflowRun?   @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  approverUser      User?            @relation(fields: [approverUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, workspaceId, status, createdAt])
+  @@index([tenantId, workflowRunId, createdAt])
+  @@map("approval_analytics_events")
+}
+
+model HallucinationEvent {
+  id                String             @id @default(uuid())
+  tenantId          String             @map("tenant_id")
+  workspaceId       String?            @map("workspace_id")
+  workflowRunId     String?            @map("workflow_run_id")
+  agentRunId        String?            @map("agent_run_id")
+  userId            String?            @map("user_id")
+  status            HallucinationStatus @default(SUSPECTED)
+  severity          String?            @map("severity")
+  detectionSource   String?            @map("detection_source") // self_check, reviewer, human_flag, external_validator
+  claim             String?            @map("claim")
+  evidence          Json?              @map("evidence")
+  correctedBy       String?            @map("corrected_by")
+  correctedAt       DateTime?          @map("corrected_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace         Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  workflowRun       AIWorkflowRun?     @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+  agentRun          AIAgentRun?        @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+  user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, workspaceId, status, createdAt])
+  @@index([tenantId, workflowRunId, createdAt])
+  @@map("hallucination_events")
+}
+
+model AIWorkflowMetricRollup {
+  id                 String            @id @default(uuid())
+  tenantId           String            @map("tenant_id")
+  workspaceId        String?           @map("workspace_id")
+  workflowKey        String            @map("workflow_key")
+  granularity        MetricGranularity @map("granularity")
+  periodStart        DateTime          @map("period_start")
+  periodEnd          DateTime          @map("period_end")
+  runCount           Int               @default(0) @map("run_count")
+  successCount       Int               @default(0) @map("success_count")
+  failureCount       Int               @default(0) @map("failure_count")
+  cancellationCount  Int               @default(0) @map("cancellation_count")
+  avgLatencyMs       Float?            @map("avg_latency_ms")
+  p95LatencyMs       Float?            @map("p95_latency_ms")
+  totalInputTokens   BigInt            @default(0) @map("total_input_tokens")
+  totalOutputTokens  BigInt            @default(0) @map("total_output_tokens")
+  totalCostUsd       Decimal           @default(0) @db.Decimal(18, 6) @map("total_cost_usd")
+  avgConfidence      Float?            @map("avg_confidence")
+  overrideRate       Float?            @map("override_rate")
+  approvalRate       Float?            @map("approval_rate")
+  hallucinationRate  Float?            @map("hallucination_rate")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  tenant             Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workspace          Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, workspaceId, workflowKey, granularity, periodStart])
+  @@index([tenantId, periodStart, periodEnd])
+  @@index([tenantId, workspaceId, workflowKey, granularity, periodStart])
+  @@map("ai_workflow_metric_rollups")
 }
 
