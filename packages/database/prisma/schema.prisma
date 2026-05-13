@@ -1,0 +1,350 @@
+// TaskFlow AI - Shared Database Schema (Design)
+//
+// Multi-tenancy strategy:
+// - Single shared Postgres schema
+// - tenant_id on every tenant-scoped table
+// - tenant_id included in unique constraints and indexes as needed
+//
+// pgvector:
+// - Enable extension in the first migration: CREATE EXTENSION IF NOT EXISTS vector;
+// - Embeddings are stored with Unsupported("vector(<dim>)") type.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------
+// Enums
+// -----------------------------
+
+enum AuditEventType {
+  WORKFLOW_STARTED
+  WORKFLOW_COMPLETED
+  WORKFLOW_FAILED
+  WORKFLOW_CHECKPOINT_SAVED
+  AGENT_RUN_STARTED
+  AGENT_RUN_COMPLETED
+  AGENT_RUN_FAILED
+  MEMORY_UPSERTED
+  API_REQUEST
+  SYSTEM
+}
+
+enum ActorType {
+  USER
+  AGENT
+  WORKFLOW
+  SYSTEM
+}
+
+enum AgentRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AgentStepKind {
+  CREW
+  MODEL
+  TOOL
+  WORKFLOW
+  OTHER
+}
+
+enum AgentStepStatus {
+  STARTED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum WorkflowRunStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum WorkflowCheckpointStatus {
+  ACTIVE
+  FINAL
+  FAILED
+}
+
+enum MemoryNamespaceType {
+  AGENT
+  WORKFLOW
+  USER
+  SYSTEM
+}
+
+// -----------------------------
+// Multi-tenancy
+// -----------------------------
+
+model Tenant {
+  id         String    @id @default(uuid())
+  name       String?   @map("name")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  auditLogs        AuditLog[]
+  agentRuns        AgentRun[]
+  workflowRuns     WorkflowRun[]
+  memoryCollections MemoryCollection[]
+
+  @@map("tenants")
+}
+
+// -----------------------------
+// Audit Logs (append-only)
+// -----------------------------
+
+model AuditLog {
+  id          String         @id @default(uuid())
+  tenantId    String         @map("tenant_id")
+
+  eventType   AuditEventType @map("event_type")
+  actorType   ActorType?     @map("actor_type")
+  actorId     String?        @map("actor_id")
+
+  subjectType String?        @map("subject_type")
+  subjectId   String?        @map("subject_id")
+
+  // Redacted-safe context for debugging/traceability
+  context     Json?          @map("context")
+
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@map("audit_log")
+}
+
+// -----------------------------
+// AI Agent Tracking
+// -----------------------------
+
+model AgentRun {
+  id          String          @id @default(uuid())
+  tenantId    String          @map("tenant_id")
+
+  // Correlation
+  workflowRunId        String? @map("workflow_run_id")
+  llmTraceId           String? @map("llm_trace_id")
+
+  agentKey    String          @map("agent_key") // canonical agent identifier (template key)
+  externalId  String?         @map("external_id") // optional external attempt id
+  status      AgentRunStatus  @default(PENDING)
+
+  startedAt   DateTime?       @map("started_at")
+  completedAt DateTime?       @map("completed_at")
+  errorCode   String?         @map("error_code")
+
+  // Metadata is redacted-safe JSON
+  metadata    Json?           @map("metadata")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  steps AgentStep[]
+
+  @@index([tenantId, status, startedAt])
+  @@map("agent_run")
+}
+
+model AgentStep {
+  id           String            @id @default(uuid())
+  tenantId     String            @map("tenant_id")
+
+  agentRunId   String            @map("agent_run_id")
+  stepSeq      Int               @map("step_seq")
+  kind         AgentStepKind    @map("kind")
+  status       AgentStepStatus @default(STARTED)
+
+  startedAt    DateTime?        @map("started_at")
+  completedAt  DateTime?        @map("completed_at")
+  errorCode    String?         @map("error_code")
+
+  // Minimal payload for traceability (avoid storing secrets/raw PII)
+  details      Json?           @map("details")
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentRun AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+
+  toolCalls AgentToolCall[]
+
+  @@unique([agentRunId, stepSeq])
+  @@index([tenantId, agentRunId])
+  @@map("agent_step")
+}
+
+model AgentToolCall {
+  id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id")
+
+  agentStepId String    @map("agent_step_id")
+  toolName    String    @map("tool_name")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  args        Json?     @map("args")
+  result      Json?     @map("result") // store summary / redacted result later
+  errorCode   String?   @map("error_code")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentStep AgentStep @relation(fields: [agentStepId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, toolName, createdAt])
+  @@map("agent_tool_call")
+}
+
+// -----------------------------
+// Workflow Persistence
+// -----------------------------
+
+model WorkflowRun {
+  id           String             @id @default(uuid())
+  tenantId     String             @map("tenant_id")
+
+  jobId        String             @map("job_id") // stable job id from api layer
+  workflowKey  String             @map("workflow_key")
+  workflowVersion String          @map("workflow_version")
+
+  status       WorkflowRunStatus @default(PENDING)
+  startedAt    DateTime?         @map("started_at")
+  completedAt  DateTime?         @map("completed_at")
+  cancelledAt  DateTime?         @map("cancelled_at")
+  errorCode    String?          @map("error_code")
+
+  // Store only references/hashes; full state is in checkpoints
+  inputRefHash String?          @map("input_ref_hash")
+  metadata     Json?            @map("metadata")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  checkpoints WorkflowCheckpoint[]
+
+  @@index([tenantId, status, startedAt])
+  @@unique([tenantId, jobId, workflowKey, workflowVersion])
+  @@map("workflow_run")
+}
+
+model WorkflowCheckpoint {
+  id            String                   @id @default(uuid())
+  tenantId      String                   @map("tenant_id")
+
+  workflowRunId String                   @map("workflow_run_id")
+  checkpointSeq Int                      @map("checkpoint_seq")
+  status        WorkflowCheckpointStatus @default(ACTIVE)
+
+  state         Json                     @map("state_json") // canonical workflow state for resume
+  stateHash     String                  @map("state_hash")
+
+  // Optional pointer to external artifacts
+  artifactRefs  Json?                  @map("artifact_refs")
+
+  createdAt     DateTime               @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowRunId, checkpointSeq])
+  @@index([tenantId, workflowRunId, createdAt])
+  @@map("workflow_checkpoint")
+}
+
+model WorkflowEventLog {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+
+  workflowRunId String    @map("workflow_run_id")
+  checkpointSeq Int?      @map("checkpoint_seq") // nullable when event isn't tied to a checkpoint
+
+  eventType     String    @map("event_type") // keep flexible for workflow evolution
+  eventSeq      Int       @map("event_seq")
+  payload       Json?     @map("payload")
+
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowRun WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, workflowRunId, createdAt])
+  @@unique([workflowRunId, eventSeq])
+  @@map("workflow_event_log")
+}
+
+// -----------------------------
+// Memory Storage (pgvector)
+// -----------------------------
+
+model MemoryCollection {
+  id          String             @id @default(uuid())
+  tenantId    String             @map("tenant_id")
+
+  namespaceType MemoryNamespaceType @map("namespace_type")
+  namespaceKey  String              @map("namespace_key") // e.g., agentKey/workflowKey/userId in canonical form
+
+  description  String?          @map("description")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items  MemoryItem[]
+
+  @@index([tenantId, namespaceType, namespaceKey])
+  @@unique([tenantId, namespaceType, namespaceKey])
+  @@map("memory_collection")
+}
+
+model MemoryItem {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+
+  collectionId  String    @map("memory_collection_id")
+
+  // Content is optional because systems may store pointers in large deployments.
+  contentText   String?   @map("content_text")
+  contentHash   String    @map("content_hash")
+
+  metadata      Json?     @map("metadata")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  collection MemoryCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+
+  embeddings MemoryEmbedding[]
+
+  @@index([tenantId, collectionId])
+  @@unique([tenantId, collectionId, contentHash])
+  @@map("memory_item")
+}
+
+model MemoryEmbedding {
+  id           String  @id @default(uuid())
+  tenantId     String  @map("tenant_id")
+
+  memoryItemId String  @map("memory_item_id")
+
+  // pgvector column
+  // Note: Prisma uses Unsupported. Ensure pgvector extension is enabled.
+  embedding    Unsupported("vector(1536)")
+
+  // Helps track embedding provenance
+  embeddingModelKey String? @map("embedding_model_key")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item MemoryItem @relation(fields: [memoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@map("memory_embedding")
+}
+

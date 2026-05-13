@@ -1,0 +1,22 @@
+.DS_Store
+.env
+.env.*.local
+.turbo
+node_modules
+dist
+build
+.next
+coverage
+
+# Python
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+.python-version
+
+# IDE
+.idea/
+.vscode/

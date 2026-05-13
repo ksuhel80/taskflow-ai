@@ -1,0 +1,13 @@
+{
+  "name": "@taskflow-ai/ai-runtime",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "lint": "python -m ruff check .",
+    "format": "python -m ruff format .",
+    "typecheck": "python -m mypy .",
+    "test": "python -m pytest -q"
+  }
+}
+
