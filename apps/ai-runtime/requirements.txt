@@ -364,7 +364,7 @@ python-dotenv==1.2.2
     #   uvicorn
 python-multipart==0.0.28
     # via mcp
-pywin32
+pywin32; platform_system=="Windows"
     # via
     #   mcp
     #   portalocker
