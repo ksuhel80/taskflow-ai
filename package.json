@@ -1,7 +1,7 @@
 {
   "name": "taskflow-ai",
   "private": true,
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@11.1.1",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -36,6 +36,14 @@
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,json,yaml,yml}": [
       "prettier -w"
+    ]
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "sharp"
     ]
   }
 }
