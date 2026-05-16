@@ -4,25 +4,25 @@
 #
 #    pip-compile --output-file=requirements.txt pyproject.toml
 #
-aiofiles==24.1.0
+aiofiles
     # via crewai
-aiohappyeyeballs==2.6.1
+aiohappyeyeballs
     # via aiohttp
-aiohttp==3.13.5
+aiohttp
     # via
     #   instructor
     #   litellm
-aiosignal==1.4.0
+aiosignal
     # via aiohttp
-aiosqlite==0.21.0
+aiosqlite
     # via crewai
-annotated-doc==0.0.4
+annotated-doc
     # via
     #   fastapi
     #   typer
-annotated-types==0.7.0
+annotated-types
     # via pydantic
-anyio==4.13.0
+anyio
     # via
     #   httpx
     #   mcp
@@ -30,40 +30,40 @@ anyio==4.13.0
     #   sse-starlette
     #   starlette
     #   watchfiles
-appdirs==1.4.4
+appdirs
     # via crewai
-attrs==26.1.0
+attrs
     # via
     #   aiohttp
     #   jsonschema
     #   referencing
-backoff==2.2.1
+backoff
     # via posthog
-bcrypt==5.0.0
+bcrypt
     # via chromadb
-build==1.5.0
+build
     # via chromadb
-certifi==2026.4.22
+certifi
     # via
     #   httpcore
     #   httpx
     #   kubernetes
     #   requests
-cffi==2.0.0
+cffi
     # via cryptography
-charset-normalizer==3.4.7
+charset-normalizer
     # via
     #   pdfminer-six
     #   requests
-chromadb==1.1.1
+chromadb
     # via crewai
-click==8.1.8
+click
     # via
     #   crewai
     #   litellm
     #   typer
     #   uvicorn
-colorama==0.4.6
+colorama
     # via
     #   build
     #   click
@@ -71,55 +71,54 @@ colorama==0.4.6
     #   uvicorn
 crewai
     # via taskflow-ai-runtime (pyproject.toml)
-cryptography==48.0.0
+cryptography
     # via
     #   pdfminer-six
     #   pyjwt
-deprecation==2.1.0
+deprecation
     # via lancedb
-distro==1.9.0
+distro
     # via
     #   openai
     #   posthog
 docstring-parser
     # via instructor
-durationpy==0.10
-    # via kubernetes
-et-xmlfile==2.0.0
+durationpy via kubernetes
+et-xmlfile
     # via openpyxl
-fastapi==0.136.1
+fastapi
     # via taskflow-ai-runtime (pyproject.toml)
-fastuuid==0.14.0
+fastuuid
     # via litellm
-filelock==3.29.0
+filelock
     # via huggingface-hub
-flatbuffers==25.12.19
+flatbuffers
     # via onnxruntime
-frozenlist==1.8.0
+frozenlist
     # via
     #   aiohttp
     #   aiosignal
-fsspec==2026.4.0
+fsspec
     # via huggingface-hub
-googleapis-common-protos==1.75.0
+googleapis-common-protos
     # via
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-grpcio==1.80.0
+grpcio
     # via
     #   chromadb
     #   opentelemetry-exporter-otlp-proto-grpc
-h11==0.16.0
+h11
     # via
     #   httpcore
     #   uvicorn
-hf-xet==1.5.0
+hf-xet
     # via huggingface-hub
-httpcore==1.0.9
+httpcore
     # via httpx
-httptools==0.7.1
+httptools
     # via uvicorn
-httpx==0.28.1
+httpx
     # via
     #   chromadb
     #   crewai
@@ -129,25 +128,24 @@ httpx==0.28.1
     #   litellm
     #   mcp
     #   openai
-httpx-sse==0.4.3
+httpx-sse
     # via mcp
-huggingface-hub==1.15.0
+huggingface-hub
     # via tokenizers
-idna==3.15
-    # via
+idna via
     #   anyio
     #   httpx
     #   requests
     #   yarl
-importlib-metadata==8.7.1
+importlib-metadata
     # via
     #   litellm
     #   opentelemetry-api
-importlib-resources==7.1.0
+importlib-resources
     # via chromadb
 instructor
     # via crewai
-jinja2==3.1.6
+jinja2
     # via
     #   instructor
     #   litellm
@@ -155,90 +153,89 @@ jiter
     # via
     #   instructor
     #   openai
-json-repair==0.25.3
+json-repair
     # via crewai
-json5==0.10.0
+json5
     # via crewai
-jsonpatch==1.33
-    # via langchain-core
-jsonpointer==3.1.1
+jsonpatch via langchain-core
+jsonpointer
     # via jsonpatch
-jsonref==1.1.0
+jsonref
     # via crewai
-jsonschema==4.26.0
+jsonschema
     # via
     #   chromadb
     #   litellm
     #   mcp
-jsonschema-specifications==2025.9.1
+jsonschema-specifications
     # via jsonschema
-kubernetes==35.0.0
+kubernetes
     # via chromadb
-lance-namespace==0.7.6
+lance-namespace
     # via lancedb
-lance-namespace-urllib3-client==0.7.6
+lance-namespace-urllib3-client
     # via lance-namespace
-lancedb==0.30.0
+lancedb
     # via crewai
-langchain-core==1.4.0
+langchain-core
     # via
     #   langgraph
     #   langgraph-checkpoint
     #   langgraph-prebuilt
-langchain-protocol==0.0.15
+langchain-protocol
     # via langchain-core
-langgraph==1.2.0
+langgraph
     # via taskflow-ai-runtime (pyproject.toml)
-langgraph-checkpoint==4.1.0
+langgraph-checkpoint
     # via
     #   langgraph
     #   langgraph-prebuilt
-langgraph-prebuilt==1.1.0
+langgraph-prebuilt
     # via langgraph
-langgraph-sdk==0.3.14
+langgraph-sdk
     # via langgraph
-langsmith==0.8.5
+langsmith
     # via langchain-core
 linkify-it-py
     # via markdown-it-py
 litellm
     # via taskflow-ai-runtime (pyproject.toml)
-markdown-it-py[linkify]==4.2.0
+markdown-it-py[linkify]
     # via
     #   mdit-py-plugins
     #   rich
     #   textual
-markupsafe==3.0.3
+markupsafe
     # via jinja2
-mcp==1.26.0
+mcp
     # via crewai
-mdit-py-plugins==0.6.1
+mdit-py-plugins
     # via textual
-mdurl==0.1.2
+mdurl
     # via markdown-it-py
-mmh3==5.2.1
+mmh3
     # via chromadb
-multidict==6.7.1
+multidict
     # via
     #   aiohttp
     #   yarl
-numpy==2.4.5
+numpy
     # via
     #   chromadb
     #   lancedb
     #   onnxruntime
-oauthlib==3.3.1
+oauthlib
     # via requests-oauthlib
-onnxruntime==1.26.0
+onnxruntime
     # via chromadb
 openai
     # via
     #   crewai
     #   instructor
     #   litellm
-openpyxl==3.1.5
+openpyxl
     # via crewai
-opentelemetry-api==1.34.1
+opentelemetry-api
     # via
     #   chromadb
     #   crewai
@@ -246,38 +243,36 @@ opentelemetry-api==1.34.1
     #   opentelemetry-exporter-otlp-proto-http
     #   opentelemetry-sdk
     #   opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp-proto-common==1.34.1
+opentelemetry-exporter-otlp-proto-common
     # via
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-exporter-otlp-proto-grpc==1.34.1
+opentelemetry-exporter-otlp-proto-grpc
     # via chromadb
-opentelemetry-exporter-otlp-proto-http==1.34.1
+opentelemetry-exporter-otlp-proto-http
     # via crewai
-opentelemetry-proto==1.34.1
+opentelemetry-proto
     # via
     #   opentelemetry-exporter-otlp-proto-common
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-sdk==1.34.1
+opentelemetry-sdk
     # via
     #   chromadb
     #   crewai
     #   opentelemetry-exporter-otlp-proto-grpc
     #   opentelemetry-exporter-otlp-proto-http
-opentelemetry-semantic-conventions==0.55b1
-    # via opentelemetry-sdk
-orjson==3.11.9
+opentelemetry-semantic-conventions via opentelemetry-sdk
+orjson
     # via
     #   chromadb
     #   langgraph-sdk
     #   langsmith
-ormsgpack==1.12.2
+ormsgpack
     # via langgraph-checkpoint
-overrides==7.7.0
+overrides
     # via chromadb
-packaging==26.2
-    # via
+packaging via
     #   build
     #   deprecation
     #   huggingface-hub
@@ -285,34 +280,32 @@ packaging==26.2
     #   langchain-core
     #   langsmith
     #   onnxruntime
-pdfminer-six==20251230
-    # via pdfplumber
-pdfplumber==0.11.9
+pdfminer-six pdfplumber
+pdfplumber
     # via crewai
-pillow==12.2.0
+pillow
     # via pdfplumber
-platformdirs==4.9.6
+platformdirs
     # via textual
-portalocker==2.7.0
+portalocker
     # via crewai
-posthog==5.4.0
+posthog
     # via chromadb
-propcache==0.5.2
+propcache
     # via
     #   aiohttp
     #   yarl
-protobuf==5.29.6
+protobuf
     # via
     #   googleapis-common-protos
     #   onnxruntime
     #   opentelemetry-proto
-pyarrow==24.0.0
+pyarrow
     # via lancedb
-pybase64==1.4.3
+pybase64
     # via chromadb
-pycparser==3.0
-    # via cffi
-pydantic==2.12.5
+pycparser via cffi
+pydantic
     # via
     #   chromadb
     #   crewai
@@ -328,47 +321,47 @@ pydantic==2.12.5
     #   openai
     #   pydantic-settings
     #   taskflow-ai-runtime (pyproject.toml)
-pydantic-core==2.41.5
+pydantic-core
     # via
     #   instructor
     #   pydantic
-pydantic-settings==2.10.1
+pydantic-settings
     # via
     #   crewai
     #   mcp
     #   taskflow-ai-runtime (pyproject.toml)
-pygments==2.20.0
+pygments
     # via
     #   rich
     #   textual
-pyjwt[crypto]==2.12.1
+pyjwt[crypto]
     # via
     #   crewai
     #   mcp
-pypdfium2==5.8.0
+pypdfium2
     # via pdfplumber
-pypika==0.51.1
+pypika
     # via chromadb
-pyproject-hooks==1.2.0
+pyproject-hooks
     # via build
-python-dateutil==2.9.0.post0
+python-dateutil.post0
     # via
     #   kubernetes
     #   lance-namespace-urllib3-client
     #   posthog
-python-dotenv==1.2.2
+python-dotenv
     # via
     #   crewai
     #   litellm
     #   pydantic-settings
     #   uvicorn
-python-multipart==0.0.28
+python-multipart
     # via mcp
-pywin32; platform_system=="Windows"
+pywin32; platform_system
     # via
     #   mcp
     #   portalocker
-pyyaml==6.0.3
+pyyaml
     # via
     #   chromadb
     #   crewai
@@ -376,9 +369,9 @@ pyyaml==6.0.3
     #   kubernetes
     #   langchain-core
     #   uvicorn
-redis==7.4.0
+redis
     # via taskflow-ai-runtime (pyproject.toml)
-referencing==0.37.0
+referencing
     # via
     #   jsonschema
     #   jsonschema-specifications
@@ -386,7 +379,7 @@ regex
     # via
     #   crewai
     #   tiktoken
-requests==2.34.2
+requests
     # via
     #   instructor
     #   kubernetes
@@ -396,66 +389,66 @@ requests==2.34.2
     #   requests-oauthlib
     #   requests-toolbelt
     #   tiktoken
-requests-oauthlib==2.0.0
+requests-oauthlib
     # via kubernetes
-requests-toolbelt==1.0.0
+requests-toolbelt
     # via langsmith
-rich==14.3.4
+rich
     # via
     #   chromadb
     #   instructor
     #   textual
     #   typer
-rpds-py==0.30.0
+rpds-py
     # via
     #   jsonschema
     #   referencing
-shellingham==1.5.4
+shellingham
     # via typer
-six==1.17.0
+six
     # via
     #   kubernetes
     #   posthog
     #   python-dateutil
-sniffio==1.3.1
+sniffio
     # via openai
-sse-starlette==3.4.4
+sse-starlette
     # via mcp
-starlette==1.0.0
+starlette
     # via
     #   fastapi
     #   mcp
     #   sse-starlette
-tenacity==9.1.4
+tenacity
     # via
     #   chromadb
     #   instructor
     #   langchain-core
-textual==8.2.6
+textual
     # via crewai
-tiktoken==0.13.0
+tiktoken
     # via litellm
-tokenizers==0.23.1
+tokenizers
     # via
     #   chromadb
     #   crewai
     #   litellm
-tomli==2.0.2
+tomli
     # via crewai
-tomli-w==1.1.0
+tomli-w
     # via crewai
-tqdm==4.67.3
+tqdm
     # via
     #   chromadb
     #   huggingface-hub
     #   lancedb
     #   openai
-typer==0.23.1
+typer
     # via
     #   chromadb
     #   huggingface-hub
     #   instructor
-typing-extensions==4.15.0
+typing-extensions
     # via
     #   aiosqlite
     #   chromadb
@@ -476,43 +469,42 @@ typing-extensions==4.15.0
     #   pydantic-core
     #   textual
     #   typing-inspection
-typing-inspection==0.4.2
+typing-inspection
     # via
     #   fastapi
     #   mcp
     #   pydantic
     #   pydantic-settings
-uc-micro-py==2.0.0
+uc-micro-py
     # via linkify-it-py
-urllib3==2.7.0
+urllib3
     # via
     #   kubernetes
     #   lance-namespace-urllib3-client
     #   requests
-uuid-utils==0.15.0
+uuid-utils
     # via
     #   langchain-core
     #   langsmith
-uv==0.11.14
+uv
     # via crewai
-uvicorn[standard]==0.47.0
+uvicorn[standard]
     # via
     #   chromadb
     #   mcp
     #   taskflow-ai-runtime (pyproject.toml)
-watchfiles==1.1.1
+watchfiles
     # via uvicorn
-websocket-client==1.9.0
+websocket-client
     # via kubernetes
-websockets==16.0
-    # via uvicorn
-xxhash==3.7.0
+websockets via uvicorn
+xxhash
     # via
     #   langgraph
     #   langsmith
-yarl==1.23.0
+yarl
     # via aiohttp
-zipp==3.23.1
+zipp
     # via importlib-metadata
-zstandard==0.25.0
+zstandard
     # via langsmith
