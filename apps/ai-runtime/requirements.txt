@@ -81,7 +81,7 @@ distro==1.9.0
     # via
     #   openai
     #   posthog
-docstring-parser==0.18.0
+docstring-parser
     # via instructor
 durationpy==0.10
     # via kubernetes
@@ -151,7 +151,7 @@ jinja2==3.1.6
     # via
     #   instructor
     #   litellm
-jiter==0.13.0
+jiter
     # via
     #   instructor
     #   openai
