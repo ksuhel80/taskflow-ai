@@ -1,7 +1,7 @@
 {
   "name": "taskflow-ai",
   "private": true,
-  "packageManager": "npm@9.6.6",
+  "packageManager": "pnpm@9.0.0",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -11,9 +11,9 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "lint": "turbo lint",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
     "typecheck": "turbo typecheck",
     "format": "prettier -w .",
     "format:check": "prettier -c .",

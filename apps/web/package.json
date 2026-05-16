@@ -22,9 +22,9 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@taskflow-ai/config": "*",
-    "@taskflow-ai/shared-types": "*",
-    "@taskflow-ai/ui": "*",
+    "@taskflow-ai/config": "workspace:*",
+    "@taskflow-ai/shared-types": "workspace:*",
+    "@taskflow-ai/ui": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
@@ -34,4 +34,3 @@
     "typescript": "^5.6.0"
   }
 }
-
