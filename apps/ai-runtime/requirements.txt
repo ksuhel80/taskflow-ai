@@ -83,7 +83,6 @@ distro
     #   posthog
 docstring-parser
     # via instructor
-durationpy via kubernetes
 et-xmlfile
     # via openpyxl
 fastapi
