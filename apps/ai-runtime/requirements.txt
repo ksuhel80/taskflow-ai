@@ -69,7 +69,7 @@ colorama==0.4.6
     #   click
     #   tqdm
     #   uvicorn
-crewai==1.14.4
+crewai
     # via taskflow-ai-runtime (pyproject.toml)
 cryptography==48.0.0
     # via
