@@ -69,7 +69,7 @@ colorama==0.4.6
     #   click
     #   tqdm
     #   uvicorn
-crewai==0.141.0
+crewai
     # via taskflow-ai-runtime (pyproject.toml)
 cryptography==48.0.0
     # via
@@ -145,7 +145,7 @@ importlib-metadata==8.7.1
     #   opentelemetry-api
 importlib-resources==7.1.0
     # via chromadb
-instructor==1.15.1
+instructor
     # via crewai
 jinja2==3.1.6
     # via
@@ -231,7 +231,7 @@ oauthlib==3.3.1
     # via requests-oauthlib
 onnxruntime==1.26.0
     # via chromadb
-openai==2.37.0
+openai
     # via
     #   crewai
     #   instructor
